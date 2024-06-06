@@ -1,0 +1,38 @@
+name: Deploy application PassGuardian
+
+on:
+    push:
+        branches: [main]
+
+jobs:
+    build: 
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+
+            - name: Setup Java
+              uses: actions/setup-java@v3
+              with:
+                distribution: 'temurin'
+                java-version: '22'
+
+            - name: Build Project
+              run: mvn clean install -DskipTests
+            - name: Login Docker Hub
+              run: docker login -u ${{secrets.DOCKER_USERNAME}} -p ${{secrets.DOCKER_PASSWORD}}
+            - name: Build Docker Image
+              run: docker build -t luanmatheus/pass_guardian .
+            - name: Push Docker Image
+              run: docker push luanmatheus/pass_guardian
+            
+    deploy:
+      needs: build
+      runs-on: self-hosted
+      steps:
+        - name: Pull Image from Docker Hub
+          run: docker pull luanmatheus/pass_guardian:latest
+        - name: Remove Container
+          run: docker rm -f deploy_pass_guardian
+        - name: Run Docker Container
+          run: docker run -d -p 8080:8080 --name deploy_pass_guardian -e DATABASE_URL=${{ secrets.DATABASE_URL }} -e DATABASE_USER=${{ secrets.DATABASE_USER }} -e DATABASE_PASSWORD='${{ secrets.DATABASE_PASSWORD }}' -e EMAIL_USERNAME='${{ secrets.EMAIL_USERNAME }}' -e EMAIL_PASSWORD='${{ secrets.EMAIL_PASSWORD }}' -e ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }} luanmatheus/pass_guardian
